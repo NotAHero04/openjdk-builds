@@ -31,7 +31,6 @@ jobs:
           zip
           unzip
           cpio
-          mercurial
 
     - name: Set up Boot JDK (Eclipse Temurin)
       uses: actions/setup-java@v4
@@ -45,23 +44,26 @@ jobs:
       run: |
         VS_PATH=$(/c/Program\ Files\ \(x86\)/Microsoft\ Visual\ Studio/Installer/vswhere.exe -latest -property installationPath)
         VCVARS_PATH="$VS_PATH/VC/Auxiliary/Build/vcvarsall.bat"
-        echo "Found vcvarsall.bat at: $VCVARS_PATH"
+
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
           VS_ARCH="x64"
         else
           VS_ARCH="x86"
         fi
-        BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
-        cmd.exe /c " "\"$VCVARS_PATH\"" $VS_ARCH && \
-          bash.exe -c ' \
-            bash ./configure \
-              --with-boot-jdk="$BOOT_JDK_WIN" \
-              --disable-precompiled-headers \
-              --with-debug-level=release \
-              --with-milestone=github-actions && \
-            make images \
-          ' \
-        "
+
+        export BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
+
+        cat > build.sh <<'EOF'
+        set -e
+        bash ./configure \
+          --with-boot-jdk="$BOOT_JDK_WIN" \
+          --disable-precompiled-headers \
+          --with-debug-level=release \
+          --with-milestone=github-actions
+        make images
+        EOF
+
+        cmd.exe /c " "\"$VCVARS_PATH\"" $VS_ARCH && bash build.sh "
 
     - name: Package the JDK
       shell: bash
