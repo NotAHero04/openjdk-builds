@@ -1,0 +1,70 @@
+name: Build OpenJDK 8 for Windows
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        architecture: [x86, x64]
+
+    steps:
+    - name: Checkout OpenJDK 8 source code
+      uses: actions/checkout@v3
+      with:
+        repository: 'openjdk/jdk8u'
+        ref: 'jdk8u-dev'
+
+    - name: Set up MSYS2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          autoconf
+          make
+          zip
+          unzip
+          cpio
+          mercurial
+
+    - name: Set up Boot JDK (AdoptOpenJDK 8)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'adopt'
+        java-version: '8'
+        architecture: x64
+
+    - name: Set up Visual Studio build environment
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Configure the build
+      shell: msys2 {0}
+      run: |
+        bash ./configure \
+          --with-boot-jdk="$JAVA_HOME" \
+          --with-target-bits=${{ matrix.architecture == 'x64' && 64 || 32 }} \
+          --with-debug-level=release \
+          --with-milestone=github-actions
+
+    - name: Build OpenJDK
+      shell: msys2 {0}
+      run: |
+        make images
+
+    - name: Package the JDK
+      shell: bash
+      run: |
+        cd build/windows-${{ matrix.architecture }}-normal-server-release/images
+        zip -r openjdk-8u-windows-${{ matrix.architecture }}.zip jdk
+        
+    - name: Upload JDK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: openjdk-8u-windows-${{ matrix.architecture }}
+        path: build/windows-${{ matrix.architecture }}-normal-server-release/images/openjdk-8u-windows-${{ matrix.architecture }}.zip
