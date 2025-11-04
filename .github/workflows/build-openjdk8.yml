@@ -40,7 +40,6 @@ jobs:
         architecture: x64
 
     - name: Configure and Build OpenJDK
-      # Use the native CMD shell to orchestrate the build.
       shell: cmd
       run: |
         REM Find the path to the vcvarsall.bat script.
@@ -55,19 +54,19 @@ jobs:
           set "VS_ARCH=x86"
         )
 
-        REM The JAVA_HOME env var is already a Windows path, which is what configure needs.
+        REM The JAVA_HOME env var is already a Windows path.
         set "BOOT_JDK_WIN=%JAVA_HOME%"
 
-        REM Create a simple bash script with our build commands.
+        REM Create a bash script with our build commands.
         echo set -e > build.sh
         echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
         echo make images >> build.sh
 
-        REM Call vcvarsall.bat to set up the MSVC environment for this CMD session.
+        REM Call vcvarsall.bat to set up the MSVC environment.
         call "%VCVARS_PATH%" %VS_ARCH%
 
-        REM Now, execute the bash script. It will inherit the correct VS environment.
-        C:\msys64\usr\bin\bash.exe -l build.sh
+        REM Execute the bash script. It will run in the current working directory.
+        C:\msys64\usr\bin\bash.exe build.sh
 
     - name: Package the JDK
       shell: bash
