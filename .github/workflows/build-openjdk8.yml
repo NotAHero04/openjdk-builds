@@ -39,7 +39,7 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    # This action sets up the required INCLUDE and LIB environment variables.
+    # This action correctly sets up the INCLUDE and LIB environment variables for the SDK.
     - name: Set up Visual Studio developer environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
@@ -54,18 +54,21 @@ jobs:
         VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
         
         # --- CRITICAL FIX: Trick the legacy VS file check ---
-        VCVARS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Auxiliary/Build" | head -n 1)
+        # The configure script sanity-checks for old batch files. We will create a dummy one
+        # to make it believe it has found a valid VS installation.
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          # The script is looking for 'vcvars64.bat' for x64 builds.
-          cp "$VCVARS_DIR_WIN/vcvarsall.bat" "$VCVARS_DIR_WIN/vcvars64.bat"
-          echo "Created dummy vcvars64.bat to satisfy configure script."
+          DUMMY_BAT_DIR="$VS_PATH_WIN/VC/bin/amd64"
+          mkdir -p "$DUMMY_BAT_DIR"
+          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$DUMMY_BAT_DIR/vcvars64.bat"
+          echo "Created dummy vcvars64.bat in $DUMMY_BAT_DIR to satisfy configure script."
         else
-          # The script is looking for 'vcvars32.bat' for x86 builds.
-          cp "$VCVARS_DIR_WIN/vcvarsall.bat" "$VCVARS_DIR_WIN/vcvars32.bat"
-          echo "Created dummy vcvars32.bat to satisfy configure script."
+          DUMMY_BAT_DIR="$VS_PATH_WIN/VC/bin"
+          mkdir -p "$DUMMY_BAT_DIR"
+          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$DUMMY_BAT_DIR/vcvars32.bat"
+          echo "Created dummy vcvars32.bat in $DUMMY_BAT_DIR to satisfy configure script."
         fi
 
-        # --- Bypass Broken VS Detection ---
+        # --- Bypass Broken VS Toolchain Detection ---
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
           TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
         else
@@ -73,10 +76,11 @@ jobs:
         fi
         TOOLS_DIR_POSIX=$(cygpath -u "$TOOLS_DIR_WIN")
         
+        # The configure script needs a Windows-style path for the boot JDK argument.
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        # --- The Grand Unified Configure Command ---
-        # This command now solves all three known problems.
+        # --- The Unified Configure Command ---
+        # This command provides everything the script needs, bypassing all of its broken auto-detection logic.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
           --with-tools-dir="$TOOLS_DIR_POSIX" \
