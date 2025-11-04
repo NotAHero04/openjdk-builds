@@ -20,13 +20,10 @@ jobs:
         repository: 'openjdk/jdk8u'
         ref: 'master'
 
-    # CRITICAL FIX: Use the 'MSYS' subsystem, not 'MINGW64'.
-    # This provides the POSIX-like environment that the old configure script expects,
-    # ensuring it finds a 'make' that it considers compatible.
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
       with:
-        msystem: MSYS
+        msystem: MINGW64
         update: true
         install: >-
           autoconf
@@ -42,35 +39,32 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    - name: Configure and Build OpenJDK
-      shell: cmd
+    # This action properly sets up the Visual Studio C++ environment (PATH, INCLUDE, LIB)
+    # for all subsequent steps, without needing to call cmd.exe.
+    - name: Set up Visual Studio developer environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.architecture }}
+
+    - name: Configure and Build
+      # This step runs in a clean bash shell that has inherited the VS environment.
+      shell: msys2 {0}
       run: |
-        REM Find the path to the vcvarsall.bat script.
-        for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do (
-          set "VS_PATH=%%i"
-        )
-        set "VCVARS_PATH=%VS_PATH%\VC\Auxiliary\Build\vcvarsall.bat"
+        set -e
+        # The configure script needs a Windows-style path for the boot JDK.
+        BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        REM Determine the target architecture for Visual Studio.
-        set "VS_ARCH=x64"
-        if "${{ matrix.architecture }}" == "x86" (
-          set "VS_ARCH=x86"
-        )
+        # Run configure, explicitly telling it the POSIX path to the correct 'make'.
+        # This completely bypasses its broken PATH search logic.
+        bash ./configure \
+          --with-boot-jdk="$BOOT_JDK_WIN" \
+          --disable-precompiled-headers \
+          --with-debug-level=release \
+          --with-milestone=github-actions \
+          MAKE=/usr/bin/make
 
-        REM The JAVA_HOME env var is already a Windows path.
-        set "BOOT_JDK_WIN=%JAVA_HOME%"
-
-        REM Create the bash script. We no longer need to force the MAKE path
-        REM because the environment should now be correct.
-        echo set -e > build.sh
-        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
-        echo make images >> build.sh
-
-        REM Call vcvarsall.bat to set up the MSVC environment.
-        call "%VCVARS_PATH%" %VS_ARCH%
-
-        REM Execute the bash script.
-        C:\msys64\usr\bin\bash.exe build.sh
+        # Now run the make command.
+        make images
 
     - name: Package the JDK
       shell: bash
