@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2019
+    runs-on: windows-latest
     strategy:
       matrix:
         architecture: [x86, x64]
@@ -50,6 +50,7 @@ jobs:
       run: |
         bash ./configure \
           --with-boot-jdk="$JAVA_HOME" \
+          --disable-precompiled-headers \
           --with-debug-level=release \
           --with-milestone=github-actions
 
