@@ -40,40 +40,34 @@ jobs:
         architecture: x64
 
     - name: Configure and Build OpenJDK
-      shell: msys2 {0}
+      # Use the native CMD shell to orchestrate the build.
+      shell: cmd
       run: |
-        VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
-        VCVARS_PATH_WIN="$VS_PATH_WIN\\VC\\Auxiliary\\Build\\vcvarsall.bat"
+        REM Find the path to the vcvarsall.bat script.
+        for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath`) do (
+          set "VS_PATH=%%i"
+        )
+        set "VCVARS_PATH=%VS_PATH%\VC\Auxiliary\Build\vcvarsall.bat"
 
-        if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          VS_ARCH="x64"
-        else
-          VS_ARCH="x86"
-        fi
+        REM Determine the target architecture for Visual Studio.
+        set "VS_ARCH=x64"
+        if "${{ matrix.architecture }}" == "x86" (
+          set "VS_ARCH=x86"
+        )
 
-        export BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
+        REM The JAVA_HOME env var is already a Windows path, which is what configure needs.
+        set "BOOT_JDK_WIN=%JAVA_HOME%"
 
-        # Create a bash script with the core build commands.
-        cat > build.sh <<'EOF'
-        set -e
-        bash ./configure \
-          --with-boot-jdk="$BOOT_JDK_WIN" \
-          --disable-precompiled-headers \
-          --with-debug-level=release \
-          --with-milestone=github-actions
-        make images
-        EOF
+        REM Create a simple bash script with our build commands.
+        echo set -e > build.sh
+        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
+        echo make images >> build.sh
 
-        cat > launch.bat <<EOF
-        @echo off
-        echo --- Initializing VS Environment for ${VS_ARCH} ---
-        call "${VCVARS_PATH_WIN}" ${VS_ARCH}
-        echo.
-        echo --- Running Bash Build Script ---
-        C:\\msys64\\usr\\bin\\bash.exe -l build.sh
-        EOF
-        
-        cmd.exe /c launch.bat
+        REM Call vcvarsall.bat to set up the MSVC environment for this CMD session.
+        call "%VCVARS_PATH%" %VS_ARCH%
+
+        REM Now, execute the bash script. It will inherit the correct VS environment.
+        C:\msys64\usr\bin\bash.exe -l build.sh
 
     - name: Package the JDK
       shell: bash
