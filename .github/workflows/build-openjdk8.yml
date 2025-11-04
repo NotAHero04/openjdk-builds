@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2019
     strategy:
       matrix:
         architecture: [x86, x64]
@@ -40,15 +40,16 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    - name: Set up Visual Studio build environment
-      uses: microsoft/setup-msbuild@v2
+    - name: Set up Visual Studio developer environment
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.architecture }}
 
     - name: Configure the build
       shell: msys2 {0}
       run: |
         bash ./configure \
           --with-boot-jdk="$JAVA_HOME" \
-          --with-target-bits=${{ matrix.architecture == 'x64' && 64 || 32 }} \
           --with-debug-level=release \
           --with-milestone=github-actions
 
@@ -60,11 +61,11 @@ jobs:
     - name: Package the JDK
       shell: bash
       run: |
-        cd build/windows-${{ matrix.architecture }}-normal-server-release/images
+        cd build/windows-*/images
         zip -r openjdk-8u-windows-${{ matrix.architecture }}.zip jdk
         
     - name: Upload JDK artifact
       uses: actions/upload-artifact@v4
       with:
         name: openjdk-8u-windows-${{ matrix.architecture }}
-        path: build/windows-${{ matrix.architecture }}-normal-server-release/images/openjdk-8u-windows-${{ matrix.architecture }}.zip
+        path: build/windows-*/images/openjdk-8u-windows-${{ matrix.architecture }}.zip
