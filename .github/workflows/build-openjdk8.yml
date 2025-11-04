@@ -18,7 +18,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: 'openjdk/jdk8u'
-        ref: 'jdk8u-dev'
+        ref: 'master'
 
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
