@@ -20,10 +20,13 @@ jobs:
         repository: 'openjdk/jdk8u'
         ref: 'master'
 
+    # CRITICAL FIX: Use the 'MSYS' subsystem, not 'MINGW64'.
+    # This provides the POSIX-like environment that the old configure script expects,
+    # ensuring it finds a 'make' that it considers compatible.
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
       with:
-        msystem: MINGW64
+        msystem: MSYS
         update: true
         install: >-
           autoconf
@@ -57,10 +60,10 @@ jobs:
         REM The JAVA_HOME env var is already a Windows path.
         set "BOOT_JDK_WIN=%JAVA_HOME%"
 
-        REM Create a bash script that explicitly tells configure where to find 'make'.
-        REM This avoids all PATH searching issues. The path /usr/bin/make is correct for bash.
+        REM Create the bash script. We no longer need to force the MAKE path
+        REM because the environment should now be correct.
         echo set -e > build.sh
-        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions MAKE=/usr/bin/make >> build.sh
+        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
         echo make images >> build.sh
 
         REM Call vcvarsall.bat to set up the MSVC environment.
