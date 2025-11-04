@@ -57,16 +57,16 @@ jobs:
         REM The JAVA_HOME env var is already a Windows path.
         set "BOOT_JDK_WIN=%JAVA_HOME%"
 
-        REM Create a bash script that fixes its own PATH before running configure.
+        REM Create a bash script that explicitly tells configure where to find 'make'.
+        REM This avoids all PATH searching issues. The path /usr/bin/make is correct for bash.
         echo set -e > build.sh
-        echo export PATH="/usr/bin:$PATH" >> build.sh
-        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
+        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions MAKE=/usr/bin/make >> build.sh
         echo make images >> build.sh
 
         REM Call vcvarsall.bat to set up the MSVC environment.
         call "%VCVARS_PATH%" %VS_ARCH%
 
-        REM Execute the bash script. It will now fix its own environment and find the correct tools.
+        REM Execute the bash script.
         C:\msys64\usr\bin\bash.exe build.sh
 
     - name: Package the JDK
