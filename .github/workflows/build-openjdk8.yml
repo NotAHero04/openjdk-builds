@@ -14,10 +14,12 @@ jobs:
         architecture: [x86, x64]
 
     steps:
+    # --- CRITICAL FIX: Checkout from the correct repository ---
+    # This repository contains the necessary patches to support Visual Studio 2022.
     - name: Checkout OpenJDK 8 source code
       uses: actions/checkout@v4
       with:
-        repository: 'openjdk/jdk8u'
+        repository: 'openjdk/jdk8u-dev'
         ref: 'master'
 
     - name: Set up MSYS2
@@ -39,7 +41,8 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    # This action correctly adds the compiler to the PATH and sets INCLUDE/LIB variables.
+    # This action remains the cleanest way to set up the VS environment.
+    # The patched configure script will now correctly use the environment it provides.
     - name: Set up Visual Studio developer environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
@@ -49,23 +52,16 @@ jobs:
       shell: msys2 {0}
       run: |
         set -e
-        
         # The configure script needs a Windows-style path for the boot JDK argument.
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        # --- CRITICAL FIX: Sabotage the broken VS auto-detection ---
-        # Unset the environment variable that triggers the faulty logic in the configure script.
-        # The script will then fall back to finding the compiler on the PATH, which is now correctly set.
-        unset VS170COMNTOOLS
-
-        # The configure command now works without --with-tools-dir, and we continue
-        # to specify the MAKE path to solve the other known issue.
+        # With the patched source code, a simple configure call should now work
+        # without any of the previous workarounds.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
           --disable-precompiled-headers \
           --with-debug-level=release \
-          --with-milestone=github-actions \
-          MAKE=/usr/bin/make
+          --with-milestone=github-actions
 
         make images
 
