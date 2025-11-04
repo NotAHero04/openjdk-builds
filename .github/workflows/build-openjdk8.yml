@@ -53,37 +53,36 @@ jobs:
         # --- Find VS Paths ---
         VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
         
-        # --- CRITICAL FIX: Trick the legacy VS file check ---
-        # The configure script sanity-checks for old batch files. We will create a dummy one
-        # to make it believe it has found a valid VS installation.
+        # --- CRITICAL FIX: Create the legacy directory structure and dummy file the script expects ---
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          DUMMY_BAT_DIR="$VS_PATH_WIN/VC/bin/amd64"
-          mkdir -p "$DUMMY_BAT_DIR"
-          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$DUMMY_BAT_DIR/vcvars64.bat"
-          echo "Created dummy vcvars64.bat in $DUMMY_BAT_DIR to satisfy configure script."
+          # 1. Define the legacy directory the script is looking for.
+          LEGACY_DIR_WIN="$VS_PATH_WIN/VC/bin/amd64"
+          # 2. Find the real compiler directory.
+          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
+          # 3. Create the dummy batch file in the legacy directory.
+          mkdir -p "$LEGACY_DIR_WIN"
+          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$LEGACY_DIR_WIN/vcvars64.bat"
+          echo "Created dummy vcvars64.bat in $LEGACY_DIR_WIN"
         else
-          DUMMY_BAT_DIR="$VS_PATH_WIN/VC/bin"
-          mkdir -p "$DUMMY_BAT_DIR"
-          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$DUMMY_BAT_DIR/vcvars32.bat"
-          echo "Created dummy vcvars32.bat in $DUMMY_BAT_DIR to satisfy configure script."
+          LEGACY_DIR_WIN="$VS_PATH_WIN/VC/bin"
+          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x86 | head -n 1)
+          mkdir -p "$LEGACY_DIR_WIN"
+          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$LEGACY_DIR_WIN/vcvars32.bat"
+          echo "Created dummy vcvars32.bat in $LEGACY_DIR_WIN"
         fi
 
-        # --- Bypass Broken VS Toolchain Detection ---
-        if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
-        else
-          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x86 | head -n 1)
-        fi
-        TOOLS_DIR_POSIX=$(cygpath -u "$TOOLS_DIR_WIN")
+        # 4. Add the real compiler directory to the front of the PATH.
+        # This is how 'configure' will find cl.exe.
+        export PATH="$(cygpath -u "$TOOLS_DIR_WIN"):$PATH"
         
         # The configure script needs a Windows-style path for the boot JDK argument.
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        # --- The Unified Configure Command ---
-        # This command provides everything the script needs, bypassing all of its broken auto-detection logic.
+        # --- The Final Configure Command ---
+        # We no longer use --with-tools-dir. The script will find the compiler via the PATH
+        # and validate the installation using our dummy batch file.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
-          --with-tools-dir="$TOOLS_DIR_POSIX" \
           --disable-precompiled-headers \
           --with-debug-level=release \
           --with-milestone=github-actions \
