@@ -39,7 +39,7 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    # This action correctly sets up the INCLUDE and LIB environment variables for the SDK.
+    # This action correctly adds the compiler to the PATH and sets INCLUDE/LIB variables.
     - name: Set up Visual Studio developer environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
@@ -49,38 +49,17 @@ jobs:
       shell: msys2 {0}
       run: |
         set -e
-
-        # --- Find VS Paths ---
-        VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
-        
-        # --- CRITICAL FIX: Create the legacy directory structure and dummy file the script expects ---
-        if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          # 1. Define the legacy directory the script is looking for.
-          LEGACY_DIR_WIN="$VS_PATH_WIN/VC/bin/amd64"
-          # 2. Find the real compiler directory.
-          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
-          # 3. Create the dummy batch file in the legacy directory.
-          mkdir -p "$LEGACY_DIR_WIN"
-          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$LEGACY_DIR_WIN/vcvars64.bat"
-          echo "Created dummy vcvars64.bat in $LEGACY_DIR_WIN"
-        else
-          LEGACY_DIR_WIN="$VS_PATH_WIN/VC/bin"
-          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x86 | head -n 1)
-          mkdir -p "$LEGACY_DIR_WIN"
-          cp "$VS_PATH_WIN/VC/Auxiliary/Build/vcvarsall.bat" "$LEGACY_DIR_WIN/vcvars32.bat"
-          echo "Created dummy vcvars32.bat in $LEGACY_DIR_WIN"
-        fi
-
-        # 4. Add the real compiler directory to the front of the PATH.
-        # This is how 'configure' will find cl.exe.
-        export PATH="$(cygpath -u "$TOOLS_DIR_WIN"):$PATH"
         
         # The configure script needs a Windows-style path for the boot JDK argument.
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        # --- The Final Configure Command ---
-        # We no longer use --with-tools-dir. The script will find the compiler via the PATH
-        # and validate the installation using our dummy batch file.
+        # --- CRITICAL FIX: Sabotage the broken VS auto-detection ---
+        # Unset the environment variable that triggers the faulty logic in the configure script.
+        # The script will then fall back to finding the compiler on the PATH, which is now correctly set.
+        unset VS170COMNTOOLS
+
+        # The configure command now works without --with-tools-dir, and we continue
+        # to specify the MAKE path to solve the other known issue.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
           --disable-precompiled-headers \
