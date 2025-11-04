@@ -57,19 +57,20 @@ jobs:
         REM The JAVA_HOME env var is already a Windows path.
         set "BOOT_JDK_WIN=%JAVA_HOME%"
 
+        REM **CRITICAL FIX**: Define the absolute path to the correct MSYS2 'make'.
+        REM We will pass this directly to the configure script.
+        set "MSYS_MAKE_PATH=/usr/bin/make"
+
         REM Create a bash script with our build commands.
+        REM Note the addition of the MAKE="%MSYS_MAKE_PATH%" argument.
         echo set -e > build.sh
-        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions >> build.sh
+        echo bash ./configure --with-boot-jdk="%BOOT_JDK_WIN%" --disable-precompiled-headers --with-debug-level=release --with-milestone=github-actions MAKE="%MSYS_MAKE_PATH%" >> build.sh
         echo make images >> build.sh
 
         REM Call vcvarsall.bat to set up the MSVC environment.
         call "%VCVARS_PATH%" %VS_ARCH%
 
-        REM **CRITICAL FIX**: Prepend the MSYS2 bin directory to the PATH.
-        REM This ensures the correct 'make.exe' is found before any others.
-        set "PATH=C:\msys64\usr\bin;%PATH%"
-
-        REM Execute the bash script. It will now find the correct tools.
+        REM Execute the bash script.
         C:\msys64\usr\bin\bash.exe build.sh
 
     - name: Package the JDK
