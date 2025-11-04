@@ -65,7 +65,11 @@ jobs:
         REM Call vcvarsall.bat to set up the MSVC environment.
         call "%VCVARS_PATH%" %VS_ARCH%
 
-        REM Execute the bash script. It will run in the current working directory.
+        REM **CRITICAL FIX**: Prepend the MSYS2 bin directory to the PATH.
+        REM This ensures the correct 'make.exe' is found before any others.
+        set "PATH=C:\msys64\usr\bin;%PATH%"
+
+        REM Execute the bash script. It will now find the correct tools.
         C:\msys64\usr\bin\bash.exe build.sh
 
     - name: Package the JDK
