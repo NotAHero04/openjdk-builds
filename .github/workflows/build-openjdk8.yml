@@ -42,8 +42,8 @@ jobs:
     - name: Configure and Build OpenJDK
       shell: msys2 {0}
       run: |
-        VS_PATH=$(/c/Program\ Files\ \(x86\)/Microsoft\ Visual\ Studio/Installer/vswhere.exe -latest -property installationPath)
-        VCVARS_PATH="$VS_PATH/VC/Auxiliary/Build/vcvarsall.bat"
+        VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
+        VCVARS_PATH_WIN="$VS_PATH_WIN\\VC\\Auxiliary\\Build\\vcvarsall.bat"
 
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
           VS_ARCH="x64"
@@ -53,6 +53,7 @@ jobs:
 
         export BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
+        # Create a bash script with the core build commands.
         cat > build.sh <<'EOF'
         set -e
         bash ./configure \
@@ -63,7 +64,16 @@ jobs:
         make images
         EOF
 
-        cmd.exe /c " "\"$VCVARS_PATH\"" $VS_ARCH && bash build.sh "
+        cat > launch.bat <<EOF
+        @echo off
+        echo --- Initializing VS Environment for ${VS_ARCH} ---
+        call "${VCVARS_PATH_WIN}" ${VS_ARCH}
+        echo.
+        echo --- Running Bash Build Script ---
+        C:\\msys64\\usr\\bin\\bash.exe -l build.sh
+        EOF
+        
+        cmd.exe /c launch.bat
 
     - name: Package the JDK
       shell: bash
