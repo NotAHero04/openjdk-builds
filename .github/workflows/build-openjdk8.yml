@@ -39,7 +39,7 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    # This action sets up the required INCLUDE and LIB environment variables for the Windows SDK.
+    # This action sets up the required INCLUDE and LIB environment variables.
     - name: Set up Visual Studio developer environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
@@ -50,28 +50,33 @@ jobs:
       run: |
         set -e
 
-        # --- Bypass Broken VS Detection ---
-        # 1. Find the VS installation path (Windows style)
+        # --- Find VS Paths ---
         VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
         
-        # 2. Find the correct compiler bin directory using a robust wildcard search
+        # --- CRITICAL FIX: Trick the legacy VS file check ---
+        VCVARS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Auxiliary/Build" | head -n 1)
+        if [[ "${{ matrix.architecture }}" == "x64" ]]; then
+          # The script is looking for 'vcvars64.bat' for x64 builds.
+          cp "$VCVARS_DIR_WIN/vcvarsall.bat" "$VCVARS_DIR_WIN/vcvars64.bat"
+          echo "Created dummy vcvars64.bat to satisfy configure script."
+        else
+          # The script is looking for 'vcvars32.bat' for x86 builds.
+          cp "$VCVARS_DIR_WIN/vcvarsall.bat" "$VCVARS_DIR_WIN/vcvars32.bat"
+          echo "Created dummy vcvars32.bat to satisfy configure script."
+        fi
+
+        # --- Bypass Broken VS Detection ---
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
           TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
         else
           TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x86 | head -n 1)
         fi
-        
-        # 3. Convert the tools path to the POSIX-style path that configure expects for this argument
         TOOLS_DIR_POSIX=$(cygpath -u "$TOOLS_DIR_WIN")
         
-        # The configure script needs a Windows-style path for the boot JDK argument
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        echo "--- Using Tools Directory: $TOOLS_DIR_POSIX"
-        echo "--- Using Boot JDK: $BOOT_JDK_WIN"
-
-        # The Grand Unified Configure Command:
-        # We now provide EVERYTHING the script needs, bypassing all of its broken auto-detection logic.
+        # --- The Grand Unified Configure Command ---
+        # This command now solves all three known problems.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
           --with-tools-dir="$TOOLS_DIR_POSIX" \
@@ -80,7 +85,6 @@ jobs:
           --with-milestone=github-actions \
           MAKE=/usr/bin/make
 
-        # Run make
         make images
 
     - name: Package the JDK
