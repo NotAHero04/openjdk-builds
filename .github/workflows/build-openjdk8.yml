@@ -39,31 +39,48 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    # This action properly sets up the Visual Studio C++ environment (PATH, INCLUDE, LIB)
-    # for all subsequent steps, without needing to call cmd.exe.
+    # This action sets up the required INCLUDE and LIB environment variables for the Windows SDK.
     - name: Set up Visual Studio developer environment
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: ${{ matrix.architecture }}
 
     - name: Configure and Build
-      # This step runs in a clean bash shell that has inherited the VS environment.
       shell: msys2 {0}
       run: |
         set -e
-        # The configure script needs a Windows-style path for the boot JDK.
+
+        # --- Bypass Broken VS Detection ---
+        # 1. Find the VS installation path (Windows style)
+        VS_PATH_WIN=$('/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe' -latest -property installationPath)
+        
+        # 2. Find the correct compiler bin directory using a robust wildcard search
+        if [[ "${{ matrix.architecture }}" == "x64" ]]; then
+          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x64 | head -n 1)
+        else
+          TOOLS_DIR_WIN=$(ls -d "$VS_PATH_WIN/VC/Tools/MSVC/"*/bin/Hostx64/x86 | head -n 1)
+        fi
+        
+        # 3. Convert the tools path to the POSIX-style path that configure expects for this argument
+        TOOLS_DIR_POSIX=$(cygpath -u "$TOOLS_DIR_WIN")
+        
+        # The configure script needs a Windows-style path for the boot JDK argument
         BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
 
-        # Run configure, explicitly telling it the POSIX path to the correct 'make'.
-        # This completely bypasses its broken PATH search logic.
+        echo "--- Using Tools Directory: $TOOLS_DIR_POSIX"
+        echo "--- Using Boot JDK: $BOOT_JDK_WIN"
+
+        # The Grand Unified Configure Command:
+        # We now provide EVERYTHING the script needs, bypassing all of its broken auto-detection logic.
         bash ./configure \
           --with-boot-jdk="$BOOT_JDK_WIN" \
+          --with-tools-dir="$TOOLS_DIR_POSIX" \
           --disable-precompiled-headers \
           --with-debug-level=release \
           --with-milestone=github-actions \
           MAKE=/usr/bin/make
 
-        # Now run the make command.
+        # Run make
         make images
 
     - name: Package the JDK
