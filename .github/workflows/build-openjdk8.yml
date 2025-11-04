@@ -40,43 +40,28 @@ jobs:
         java-version: '8'
         architecture: x64
 
-    - name: Set up Visual Studio developer environment
-      uses: ilammy/msvc-dev-cmd@v1
-      with:
-        arch: ${{ matrix.architecture }}
-
-    - name: Find Visual Studio Tools Directory
-      id: find_vs
-      shell: pwsh
-      run: |
-        $vs_path = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-        $tools_dir_x64 = (Get-ChildItem -Path "$vs_path\VC\Tools\MSVC\*\bin\Hostx64\x64" -Directory).FullName
-        $tools_dir_x86 = (Get-ChildItem -Path "$vs_path\VC\Tools\MSVC\*\bin\Hostx64\x86" -Directory).FullName
-        echo "VS_TOOLS_X64=$tools_dir_x64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "VS_TOOLS_X86=$tools_dir_x86" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-    - name: Configure the build
+    - name: Configure and Build OpenJDK
       shell: msys2 {0}
       run: |
+        VS_PATH=$(/c/Program\ Files\ \(x86\)/Microsoft\ Visual\ Studio/Installer/vswhere.exe -latest -property installationPath)
+        VCVARS_PATH="$VS_PATH/VC/Auxiliary/Build/vcvarsall.bat"
+        echo "Found vcvarsall.bat at: $VCVARS_PATH"
         if [[ "${{ matrix.architecture }}" == "x64" ]]; then
-          TOOLS_DIR=$(cygpath -u "${{ env.VS_TOOLS_X64 }}")
+          VS_ARCH="x64"
         else
-          TOOLS_DIR=$(cygpath -u "${{ env.VS_TOOLS_X86 }}")
+          VS_ARCH="x86"
         fi
-
-        echo "Using tools directory: $TOOLS_DIR"
-
-        bash ./configure \
-          --with-tools-dir="$TOOLS_DIR" \
-          --with-boot-jdk="$JAVA_HOME" \
-          --disable-precompiled-headers \
-          --with-debug-level=release \
-          --with-milestone=github-actions
-
-    - name: Build OpenJDK
-      shell: msys2 {0}
-      run: |
-        make images
+        BOOT_JDK_WIN=$(cygpath -w "$JAVA_HOME")
+        cmd.exe /c " "\"$VCVARS_PATH\"" $VS_ARCH && \
+          bash.exe -c ' \
+            bash ./configure \
+              --with-boot-jdk="$BOOT_JDK_WIN" \
+              --disable-precompiled-headers \
+              --with-debug-level=release \
+              --with-milestone=github-actions && \
+            make images \
+          ' \
+        "
 
     - name: Package the JDK
       shell: bash
